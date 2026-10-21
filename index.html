@@ -1,0 +1,579 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Crowds on a Voronoi mesh</title>
+  <meta name="description"
+    content="Interactive crowd simulations and mean field game equilibria on Voronoi tessellations. Everything runs in the browser.">
+  <meta name="author" content="David Cavender">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Crowds on a Voronoi mesh">
+  <meta property="og:description"
+    content="Mean field games you can play with: a crowd that plans ahead, solved live in your browser, raced against a crowd that only reacts.">
+  <meta property="og:image" content="https://dbcav.github.io/voronoi_crowds/assets/preview.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:url" content="https://dbcav.github.io/voronoi_crowds/">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="vendor/katex/katex.min.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+  <header class="masthead">
+    <div class="mast-top">
+      <div class="mast-id">
+        <h1>Crowds on a Voronoi mesh</h1>
+        <p class="byline">I'm David Cavender, a mathematics PhD candidate at UC San Diego. I work on optimization, mean
+          field games and multi-agent control.</p>
+      </div>
+      <nav class="contact" aria-label="Contact and links">
+        <a href="https://github.com/dbcav/voronoi_crowds" rel="noopener">GitHub</a>
+        <a href="https://www.linkedin.com/in/david-cavender/" rel="noopener">LinkedIn</a>
+        <a href="mailto:dcavende@ucsd.edu">Email</a>
+      </nav>
+    </div>
+    <div class="intro">
+      <p class="lede"><b>What’s a mean field game?</b> It’s a way to model what happens when a huge number of "agents"
+        each make their own best decisions in a shared space (or "play a game"). Instead of tracking every individual,
+        you track the crowd as a density and look for a consistent outcome: each agent’s plan is optimal given where the
+        crowd will be, and the crowd ends up exactly where those plans take it.</p>
+      <details class="aside">
+        <summary>More on mean field games</summary>
+        <div class="aside-body text-only">
+          <div class="aside-text">
+            <p>The description above intentionally leaves many things up to interpretation. "Agents" might be
+              pedestrians, quadrotor drones, self-driving cars, or traders in a financial market, and "games" might be a
+              crowd evacuation problem, coordinated exploration of a 3-d region, or a group of traders each trying to
+              liquidate a large position without causing a crash in the price.</p>
+            <p>By alternating between solving for the crowd's density and the cost it creates, we can iteratively
+              improve until we reach a fixed point. That fixed point is often called an "equilibrium", and I spend time
+              trying to find new ways to compute it reliably and efficiently.</p>
+          </div>
+        </div>
+      </details>
+    </div>
+  </header>
+
+  <main>
+    <!-- ───────────────────────────── Sheet 1 ───────────────────────────── -->
+    <section class="sheet" id="live" aria-labelledby="live-title">
+      <div class="sheet-head">
+        <h2 id="live-title">A crowd that only reacts</h2>
+        <p> Here we'll attempt to model how a collection of pedestrians would move through a room in 2-D. Each
+          pedestrian will be given an intended terminal position (this is selected with the "Who goes where" button:
+          "Closest" sends pedestrians to the closest terminal position inside the target area, "Mirrored" sends each
+          agent from their initial position inside the starting circle into the mirrored position in the final circle,
+          and "Shuffled" randomly selects terminal positions within the target area). There are also three different
+          obstacle configurations to play with, and different repulsion terms available.</p>
+        <details class="aside">
+          <summary>What's a Voronoi cell?</summary>
+          <div class="aside-body">
+            <figure class="aside-fig">
+              <img class="vor-fig" src="assets/voronoi-cells.svg" width="364" height="224"
+                alt="Voronoi cells around a few dozen agents. Agents packed close together get small, dark cells; agents with room around them get large, pale ones.">
+              <figcaption>Small, dark cells sit in the tight cluster on the left and large, pale ones belong to agents
+                out on their own. One of each is outlined in green.</figcaption>
+            </figure>
+            <div class="aside-text">
+              <p>Imagine scattering some points in a room. Then the Voronoi cell of a point is all of the floor that is
+                closer to that
+                point than to any other point. Every spot in the room belongs to exactly one cell (apart from ties on
+                the boundaries), so the cells tile the room with no gaps and no overlaps. Each cell is a convex
+                polygon, and two points whose cells share an edge are called neighbours.</p>
+              <p>What makes this useful for crowds is that a cell's area is a local measure of crowding. An agent
+                packed into a tight group gets a small cell and an agent with room around it gets a large one, so one
+                over the area behaves like a density that each agent can work out from its neighbours alone. In the
+                simulation below each cell is also cut off at a small radius around its agent, so a lone agent doesn't
+                claim the whole empty room.</p>
+              <p>The page uses Voronoi cells in two ways. In the first simulation the points are the agents themselves,
+                so the cells reshape at every time step and the pressure pushes each agent toward roomier neighbours.
+                In the second, the points stay fixed and their cells become the mesh on which the mean field game is
+                solved, much like a finite volume grid that can follow walls and doorways more naturally than a square
+                grid can.</p>
+            </div>
+          </div>
+        </details>
+      </div>
+
+      <div class="sheet-body">
+        <figure class="plate">
+          <div class="canvas-wrap">
+            <canvas id="swarm-canvas" tabindex="0"
+              aria-label="Live crowd simulation. Drag the green circle to move the target and the dashed circle to move the start. With the canvas focused, arrow keys move the target and shift plus arrow keys move the start."></canvas>
+          </div>
+          <div class="plate-bar">
+            <button type="button" class="btn btn-primary" id="swarm-play" aria-pressed="true">Pause</button>
+            <button type="button" class="btn" id="swarm-restart">Restart</button>
+            <dl class="readouts" aria-live="off">
+              <div>
+                <dt>Time</dt>
+                <dd id="swarm-time">0.0 s</dd>
+              </div>
+              <div>
+                <dt>At their spot</dt>
+                <dd id="swarm-arrived">0%</dd>
+              </div>
+              <div>
+                <dt>Touching now</dt>
+                <dd id="swarm-touch">0</dd>
+              </div>
+              <div>
+                <dt>Most at once</dt>
+                <dd id="swarm-peak">0</dd>
+              </div>
+            </dl>
+          </div>
+          <figcaption class="hint">
+            <span class="cell-key" aria-hidden="true"><span>room to spare</span><span class="cell-key-bar"
+                id="swarm-key-bar"></span><span>squeezed</span></span>
+            Cells are blue when an agent has more room than it needs and red when it is packed tighter than it likes.
+            Try turning off Voronoi pressure and watch the doorway turn red. Drag the green circle to move the target
+            and the dashed one to move the start; the small square on each rim resizes it.</figcaption>
+        </figure>
+
+        <form class="titleblock" id="swarm-controls" aria-label="Live crowd settings">
+          <div class="tb-grid">
+            <div class="tb-cell tb-wide">
+              <label for="sw-n">Agents <output id="sw-n-out">300</output></label>
+              <input type="range" id="sw-n" name="n" min="20" max="1500" step="10" value="300">
+            </div>
+
+            <fieldset class="tb-cell tb-wide">
+              <legend>Room</legend>
+              <div class="segmented">
+                <input type="radio" name="scene" id="sw-scene-open" value="open"><label for="sw-scene-open">Open
+                  floor</label>
+                <input type="radio" name="scene" id="sw-scene-door" value="door" checked><label
+                  for="sw-scene-door">Door</label>
+                <input type="radio" name="scene" id="sw-scene-pillars" value="pillars"><label
+                  for="sw-scene-pillars">Pillars</label>
+              </div>
+            </fieldset>
+
+            <div class="tb-cell">
+              <label for="sw-start-shape">Start shape</label>
+              <select id="sw-start-shape" name="startShape"></select>
+            </div>
+            <div class="tb-cell">
+              <label for="sw-target-shape">Target shape</label>
+              <select id="sw-target-shape" name="targetShape"></select>
+            </div>
+
+            <fieldset class="tb-cell tb-wide">
+              <legend>Who goes where</legend>
+              <div class="segmented">
+                <input type="radio" name="matching" id="sw-m-opt" value="optimal" checked><label for="sw-m-opt"
+                  title="Shortest total walking distance">Closest</label>
+                <input type="radio" name="matching" id="sw-m-mir" value="mirrored"><label for="sw-m-mir"
+                  title="Everyone heads for the opposite side, so paths cross">Mirrored</label>
+                <input type="radio" name="matching" id="sw-m-shuf" value="shuffled"><label for="sw-m-shuf"
+                  title="Random spots, lots of crossing">Shuffled</label>
+              </div>
+            </fieldset>
+
+            <fieldset class="tb-cell tb-wide">
+              <legend>How agents avoid each other</legend>
+              <div class="toggle-row">
+                <input type="checkbox" id="sw-pressure" name="pressure" checked>
+                <label for="sw-pressure">Voronoi pressure</label>
+                <input type="range" id="sw-pressure-k" name="strength" min="0.2" max="3" step="0.1" value="1"
+                  aria-label="Voronoi pressure strength">
+              </div>
+              <div class="toggle-row">
+                <input type="checkbox" id="sw-repulsion" name="repulsion">
+                <label for="sw-repulsion">Contact repulsion</label>
+                <input type="range" id="sw-repulsion-k" name="repStrength" min="0.2" max="3" step="0.1" value="1"
+                  aria-label="Contact repulsion strength">
+              </div>
+            </fieldset>
+
+            <div class="tb-cell">
+              <label for="sw-personal">Personal space <output id="sw-personal-out">1.8×</output></label>
+              <input type="range" id="sw-personal" name="personal" min="1.2" max="3" step="0.1" value="1.8">
+            </div>
+            <div class="tb-cell">
+              <label for="sw-noise">Jostling <output id="sw-noise-out">0</output></label>
+              <input type="range" id="sw-noise" name="noise" min="0" max="10" step="1" value="0">
+            </div>
+            <div class="tb-cell">
+              <label for="sw-speed">Playback <output id="sw-speed-out">1×</output></label>
+              <input type="range" id="sw-speed" name="speed" min="0.25" max="3" step="0.25" value="1">
+            </div>
+            <fieldset class="tb-cell">
+              <legend>Show</legend>
+              <div class="check-row"><input type="checkbox" id="sw-show-cells" checked><label
+                  for="sw-show-cells">Cells</label></div>
+              <div class="check-row"><input type="checkbox" id="sw-show-targets" checked><label
+                  for="sw-show-targets">Targets</label></div>
+            </fieldset>
+
+          </div>
+          <div class="tb-foot">
+            <span class="tb-sheet">Sheet 1 of 2</span>
+            <span>Myopic agents, live</span>
+            <span>Room is 1 × 1</span>
+          </div>
+        </form>
+      </div>
+
+      <div class="sheet-foot">
+        <div class="chart-block">
+          <h3>Pairs of agents touching</h3>
+          <p class="chart-sub">Change a setting and restart: the last run stays on the chart for comparison.</p>
+          <div id="swarm-chart"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ───────────────────────────── Sheet 2 ───────────────────────────── -->
+    <section class="sheet" id="plan" aria-labelledby="plan-title">
+      <div class="sheet-head">
+        <h2 id="plan-title">A crowd that plans ahead using an MFG</h2>
+        <p>Here every agent picks a route knowing where everyone else will be, and everyone else does the same. This
+          information comes from the solution (equilibrium) of a mean-field game.
+          Here we solve it on a Voronoi mesh, and then use that solution to compete against agents who only react. <a
+            href="how-it-works.html">How the game and its sliders
+            work</a>.</p>
+      </div>
+
+      <ol class="pipeline" aria-label="What happens when you change something">
+        <li id="pl-solve"><span class="pl-num">1</span><span class="pl-text"><b>Solve the game</b><span class="pl-state"
+              id="pl-solve-state">waiting</span></span></li>
+        <li id="pl-draw"><span class="pl-num">2</span><span class="pl-text"><b>Draw <span class="pl-n">300</span> agents
+              from its starting density</b><span class="pl-state" id="pl-draw-state">waiting</span></span></li>
+        <li id="pl-run"><span class="pl-num">3</span><span class="pl-text"><b>Run them, and the same <span
+                class="pl-n">300</span> reacting instead</b><span class="pl-state"
+              id="pl-run-state">waiting</span></span></li>
+      </ol>
+
+      <div class="duel-body">
+        <figure class="plate duel-plate">
+          <figcaption class="duel-label"><b>Planning</b> Colour is the equilibrium density. Dots are agents following
+            its plan, never looking at each other.</figcaption>
+          <div class="canvas-wrap">
+            <canvas id="mfg-canvas" tabindex="0"
+              aria-label="Equilibrium density with planning agents on top. Drag the dashed circle to move where the crowd starts and the green circle to move the target zone; everything is solved and run again when you let go."></canvas>
+            <div class="solving" id="mfg-status" role="status"></div>
+          </div>
+        </figure>
+        <figure class="plate duel-plate">
+          <figcaption class="duel-label"><b>Reacting</b> The same starting spots. Agents head for the target and push
+            back against the crowd they see now. Colour is their own density.</figcaption>
+          <div class="canvas-wrap"><canvas id="react-canvas"
+              aria-label="Reacting agents from the same starting spots, coloured by their own density."></canvas></div>
+        </figure>
+        <div class="plate-bar duel-bar">
+          <button type="button" class="btn btn-primary" id="mfg-play" aria-pressed="false">Play</button>
+          <label class="scrub">
+            <span class="visually-hidden">Time</span>
+            <input type="range" id="mfg-time" min="0" max="1000" step="1" value="0">
+          </label>
+          <span class="time-readout" id="mfg-time-out">t = 0.00</span>
+          <div class="segmented compact" role="radiogroup" aria-label="Which game the planning agents play">
+            <input type="radio" name="mfg-view" id="mfg-view-aware" value="aware" checked><label
+              for="mfg-view-aware">Crowd-aware plan</label>
+            <input type="radio" name="mfg-view" id="mfg-view-blind" value="blind"><label
+              for="mfg-view-blind">Crowd-blind plan</label>
+          </div>
+        </div>
+        <p class="hint duel-hint">Drag the dashed circle on the left to move where the crowd starts, and the green
+          circle to move the target zone. The squares on the rims resize them. When you let go, all three steps run
+          again. Crowd-blind agents plan as if nobody else were there.</p>
+      </div>
+
+      <form class="titleblock band" id="mfg-controls" aria-label="Game and agent settings">
+        <div class="tb-grid">
+          <fieldset class="tb-cell tb-wide">
+            <legend>Room</legend>
+            <div class="segmented">
+              <input type="radio" name="scene" id="mf-scene-open" value="open"><label for="mf-scene-open">Open</label>
+              <input type="radio" name="scene" id="mf-scene-door" value="door"><label for="mf-scene-door">One
+                door</label>
+              <input type="radio" name="scene" id="mf-scene-two" value="twodoors" checked><label for="mf-scene-two">Two
+                doors</label>
+            </div>
+          </fieldset>
+          <div class="tb-cell">
+            <label for="mf-kappa">Dislike of crowds <output id="mf-kappa-out">0.004</output></label>
+            <input type="range" id="mf-kappa" name="kappa" min="0.0005" max="0.02" step="0.0005" value="0.004">
+          </div>
+          <div class="tb-cell">
+            <label for="mf-urgency">Urgency <output id="mf-urgency-out">1.0</output></label>
+            <input type="range" id="mf-urgency" name="urgency" min="0.5" max="2" step="0.1" value="1">
+          </div>
+          <div class="tb-cell">
+            <label for="mf-nu">Randomness <output id="mf-nu-out">0.002</output></label>
+            <input type="range" id="mf-nu" name="nu" min="0" max="0.01" step="0.0005" value="0.002">
+          </div>
+          <div class="tb-cell">
+            <label for="mf-T">Time allowed <output id="mf-T-out">1.6</output></label>
+            <input type="range" id="mf-T" name="T" min="1" max="3" step="0.1" value="1.6">
+          </div>
+          <div class="tb-cell">
+            <label for="mf-mesh">Mesh</label>
+            <select id="mf-mesh" name="mesh"></select>
+          </div>
+          <div class="tb-cell">
+            <label for="mf-cells">Cells <output id="mf-cells-out">800</output></label>
+            <input type="range" id="mf-cells" name="cells" min="300" max="1600" step="50" value="800">
+          </div>
+          <div class="tb-cell">
+            <label for="mf-iters">Rounds of play <output id="mf-iters-out">30</output></label>
+            <input type="range" id="mf-iters" name="iters" min="5" max="80" step="5" value="30">
+          </div>
+          <div class="tb-cell">
+            <label for="duel-n">Agents <output id="duel-n-out">300</output></label>
+            <input type="range" id="duel-n" min="50" max="800" step="50" value="300">
+          </div>
+          <fieldset class="tb-cell tb-wide">
+            <legend>Agents</legend>
+            <div class="check-row inline"><input type="checkbox" id="duel-pressure" checked><label
+                for="duel-pressure">Voronoi pressure for reacting agents</label></div>
+            <div class="check-row inline"><input type="checkbox" id="duel-repulsion"><label for="duel-repulsion">Contact
+                repulsion for everyone</label></div>
+            <div class="check-row inline"><input type="checkbox" id="duel-spread" checked><label for="duel-spread"
+                title="Off: planners use the equilibrium's mean drift plus the randomness setting only">Planners copy
+                the scheme’s spread</label></div>
+          </fieldset>
+          <fieldset class="tb-cell tb-wide tb-full">
+            <legend>Show</legend>
+            <div class="check-row inline"><input type="checkbox" id="mf-show-mesh"><label for="mf-show-mesh">Mesh
+                lines</label></div>
+            <div class="check-row inline"><input type="checkbox" id="mf-show-flow"><label for="mf-show-flow">Flow
+                arrows</label></div>
+            <div class="check-row inline"><input type="checkbox" id="mf-show-agents" checked><label
+                for="mf-show-agents">Agents</label></div>
+          </fieldset>
+        </div>
+        <div class="tb-foot">
+          <span class="tb-sheet">Sheet 2 of 2</span>
+          <span>Mean field equilibrium, then N agents</span>
+          <span>Room is 1 × 1</span>
+        </div>
+      </form>
+
+      <div class="sheet-foot">
+        <div class="compare-block">
+          <h3>What each crowd paid</h3>
+          <p class="chart-sub">Every agent is billed with the game’s own cost: moving, plus \(\kappa\) times the
+            crowding it sits in, plus urgency times the distance still to go at the end. Crowding is the crowd’s own
+            density on the game’s mesh, leaving each agent out of its own count, so all columns are scored the same way.
+            Crowd-blind plans are billed for crowding too.</p>
+          <p class="table-status" id="du-status" aria-live="polite"></p>
+          <div class="table-scroll">
+            <table class="compare compare-4" id="du-table">
+              <thead>
+                <tr>
+                  <th scope="col"></th>
+                  <th scope="col">Reacting agents</th>
+                  <th scope="col">Planning agents</th>
+                  <th scope="col">Crowd-blind planners</th>
+                  <th scope="col">Equilibrium density</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr class="total">
+                  <th scope="row">Average cost per agent</th>
+                  <td id="du-tot-react">–</td>
+                  <td id="du-tot-plan">–</td>
+                  <td id="du-tot-blind">–</td>
+                  <td id="du-tot-eq">–</td>
+                </tr>
+                <tr class="sub">
+                  <th scope="row">from moving</th>
+                  <td id="du-mov-react">–</td>
+                  <td id="du-mov-plan">–</td>
+                  <td id="du-mov-blind">–</td>
+                  <td id="du-mov-eq">–</td>
+                </tr>
+                <tr class="sub">
+                  <th scope="row">from crowding</th>
+                  <td id="du-cro-react">–</td>
+                  <td id="du-cro-plan">–</td>
+                  <td id="du-cro-blind">–</td>
+                  <td id="du-cro-eq">–</td>
+                </tr>
+                <tr class="sub">
+                  <th scope="row">from distance still to go</th>
+                  <td id="du-ter-react">–</td>
+                  <td id="du-ter-plan">–</td>
+                  <td id="du-ter-blind">–</td>
+                  <td id="du-ter-eq">–</td>
+                </tr>
+                <tr>
+                  <th scope="row">Reached the target zone</th>
+                  <td id="du-arr-react">–</td>
+                  <td id="du-arr-plan">–</td>
+                  <td id="du-arr-blind">–</td>
+                  <td id="du-arr-eq">–</td>
+                </tr>
+                <tr>
+                  <th scope="row">Densest moment, relative to the start</th>
+                  <td id="du-pk-react">–</td>
+                  <td id="du-pk-plan">–</td>
+                  <td id="du-pk-blind">–</td>
+                  <td id="du-pk-eq">–</td>
+                </tr>
+                <tr id="du-door-row">
+                  <th scope="row">Went through the far door</th>
+                  <td id="du-door-react">–</td>
+                  <td id="du-door-plan">–</td>
+                  <td id="du-door-blind">–</td>
+                  <td id="du-door-eq">–</td>
+                </tr>
+                <tr>
+                  <th scope="row">Most pairs touching at once</th>
+                  <td id="du-tch-react">–</td>
+                  <td id="du-tch-plan">–</td>
+                  <td id="du-tch-blind">–</td>
+                  <td>no bodies</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="runlog" id="du-log" hidden>
+            <h3>Your runs</h3>
+            <p class="chart-sub">Each time a run finishes it is added here with what you changed since the one before,
+              so you can see what a slider does to each crowd’s average cost. Hover a change to see the full settings.
+            </p>
+            <div class="table-scroll">
+              <table class="compare runlog-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Run</th>
+                    <th scope="col">What changed</th>
+                    <th scope="col">Reacting</th>
+                    <th scope="col">Planning</th>
+                    <th scope="col">Crowd-blind</th>
+                    <th scope="col">Equilibrium</th>
+                    <th scope="col">Reacting ÷ planning</th>
+                  </tr>
+                </thead>
+                <tbody id="du-log-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        <div class="two-up foot-charts">
+          <div class="chart-block">
+            <h3>Step 1: disagreement between guess and best response</h3>
+            <p class="chart-sub">Each round, agents best-respond to the averaged crowd so far. At an equilibrium the two
+              agree, so this gap goes to zero.</p>
+            <div id="mfg-chart"></div>
+          </div>
+          <div class="chart-block">
+            <h3>Step 3: pairs of agents touching</h3>
+            <p class="chart-sub">Bodies are sized so the densest part of the starting crowd sits at a comfortable
+              spacing. With randomness above zero every crowd jostles at each step; set it to 0 for the cleaner
+              comparison.</p>
+            <div id="duel-chart"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ───────────────────────────── Notes ───────────────────────────── -->
+    <section class="notes" aria-labelledby="notes-title">
+      <h2 id="notes-title">What the page computes</h2>
+      <p class="notes-link">A gentler walk through the game, what every slider changes and how it is solved is on <a
+          href="how-it-works.html">How the crowd game works</a>.</p>
+      <div class="notes-cols">
+        <article>
+          <h3>Sheet 1: one energy, local forces</h3>
+          <p>Agent \(i\) owns \(W_i\), its Voronoi cell cut off at a bubble of radius \(R\). With a comfortable area
+            \(a_0\), its crowding is \(\rho_i = a_0/|W_i|\) and its pressure is \(P_i = \rho_i^6\). The whole crowd has
+            one energy</p>
+          $$E = \sum_i \frac{|W_i|\,\rho_i^{6}}{5},$$
+          <p>and its gradient only involves neighbours:</p>
+          $$-\frac{\partial E}{\partial x_i} = \sum_j \frac{S_{ij}}{d_{ij}}\,(P_i - P_j)\,(c_{ij} - x_i) \;+\; P_i
+          \oint_{\text{arc}} n \,\mathrm{d}s.$$
+          <p>Here \(S_{ij}\) is the edge two cells share, \(c_{ij}\) its midpoint and \(d_{ij}\) the distance between
+            the two agents. The last integral runs over the arc where a cell meets its bubble. Agents move along this
+            force plus their walking direction, so the crowd slides toward roomier neighbours. Contact repulsion is the
+            usual alternative: a push between any two agents closer than a few body widths.</p>
+        </article>
+        <article>
+          <h3>Step 1: backward, then forward with the transpose</h3>
+          <p>The mesh has cells \(i\) with areas \(|V_i|\) and edge weights \(\tau_{ij} = S_{ij}/d_{ij}\). The cost
+            still to pay, \(u_i(t)\), solves backward in time</p>
+          $$-\dot u_i + \frac{1}{2|V_i|}\sum_j \tau_{ij}\big((u_i - u_j)^+\big)^2 - \frac{\nu}{|V_i|}\sum_j
+          \tau_{ij}\,(u_j - u_i) = \kappa\, m_i,$$
+          <p>ending at the walking distance to the target. Agents leave cell \(i\) for \(j\) at speed \((u_i -
+            u_j)^+/d_{ij}\). The density \(m\) then moves forward using exactly the transpose of the matrix from each
+            backward step. That one choice makes mass exactly conserved and density never negative. It also makes the
+            average cost at the start equal the total cost paid along the way, to solver precision. It is the same
+            transpose trick that backpropagation uses.</p>
+          <p>Fictitious play couples the two: solve backward against the crowd guessed so far, push the crowd forward,
+            average it in, repeat. Crowd-blind agents are the same game with \(\kappa = 0\).</p>
+        </article>
+        <article>
+          <h3>Steps 2 and 3: from the density back to agents</h3>
+          <p>A planning agent in cell \(i\) moves with the equilibrium’s drift</p>
+          $$v_i = \frac{1}{|V_i|}\sum_j S_{ij}\,(u_i - u_j)^+\, n_{ij} \;\approx\; -\nabla u,$$
+          <p>blended smoothly across neighbouring cells. On top of that it gets the spread of the equilibrium’s own
+            random walk, whose covariance per unit time is \(\sum_j \lambda_{ij}\, d_{ij}^2\, n_{ij} n_{ij}^{\mathsf
+            T}\) with jump rates \(\lambda_{ij} = \tau_{ij}\big((u_i-u_j)^+ + \nu\big)/|V_i|\). That spread includes
+            \(\nu\) plus the smoothing the upwind scheme builds in, so \(N\) planning agents reproduce the discrete
+            equilibrium rather than a sharper idealized version of it.</p>
+          <p>A reacting agent uses the same drift formula with the cost to go replaced by the terminal cost alone, which
+            is a zero-horizon plan, and adds the Voronoi pressure from sheet 1. Every agent is billed</p>
+          $$\int_0^T \Big(\tfrac12 |v|^2 + \kappa\, \hat m(t, X_t)\Big)\,\mathrm{d}t \;+\; \text{urgency} \times
+          D(X_T),$$
+          <p>where \(\hat m\) is the crowd’s own density on the mesh, pooled over each cell and its neighbours, with the
+            agent itself left out.</p>
+        </article>
+      </div>
+    </section>
+
+    <!-- ───────────────────────────── Closing ───────────────────────────── -->
+    <section class="notes closing" aria-labelledby="closing-title">
+      <h2 id="closing-title">Closing comments</h2>
+      <p>You probably noticed that the planning crowd doesn't always beat the reacting crowd on the numbers in the
+        table. That's expected, for a few reasons. A mean field equilibrium is a Nash equilibrium: each agent does the
+        best it can for itself given what everyone else does, which is not the same as the crowd doing the best it can
+        as a whole, so a simpler rule can sometimes end up with a lower average cost. The equilibrium is also computed
+        for a continuous density on a mesh with a limited number of rounds of play, and then handed to a few hundred
+        individual agents who follow the plan without ever looking at each other, while the reacting agents respond to
+        where their neighbours actually are. Some of the metrics, like the number of pairs touching, aren't part of the
+        game's cost at all.</p>
+      <p>None of this means mean field games aren't useful. They aren't meant to be a complete replacement for
+        multi-agent simulation. Their strength is that the cost of solving one doesn't grow directly with the number of
+        agents,
+        and the equilibrium is known to be an approximate equilibrium for the finite crowd, with the approximation
+        getting better as the crowd gets larger. When the number of agents is overwhelming, that makes a mean field
+        game a good way to find a rough starting point, and the two can be used in tandem: the mean field solution
+        supplies the overall plan, and a multi-agent model refines it with the details the density leaves out, such as
+        individual bodies bumping into each other.</p>
+    </section>
+  </main>
+
+  <footer class="colophon">
+    <p>By David Cavender. <a href="https://github.com/dbcav/voronoi_crowds">Source on GitHub</a>.</p>
+  </footer>
+
+  <script src="js/colors.js"></script>
+  <script src="js/voronoi.js"></script>
+  <script src="js/shapes.js"></script>
+  <script src="js/swarm.js"></script>
+  <script src="js/mfg.js"></script>
+  <script src="js/chart.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/swarm-view.js"></script>
+  <script src="js/mfg-view.js"></script>
+  <script src="js/duel.js"></script>
+  <script src="js/main.js"></script>
+  <script src="vendor/katex/katex.min.js"></script>
+  <script src="vendor/katex/auto-render.min.js"></script>
+  <script src="js/math.js"></script>
+</body>
+
+</html>

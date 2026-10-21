@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>How the crowd game works</title>
+  <meta name="description"
+    content="A short guide to the mean field game on the Crowds on a Voronoi mesh page: what the game is, what each slider changes, and how it is solved.">
+  <meta name="author" content="David Cavender">
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="How the crowd game works">
+  <meta property="og:description"
+    content="What a mean field game is, what each parameter changes, and how the page solves it.">
+  <meta property="og:image" content="https://dbcav.github.io/voronoi_crowds/assets/preview.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="vendor/katex/katex.min.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body class="doc">
+  <header class="masthead doc-head">
+    <p class="back"><a href="index.html#plan">Back to the crowds</a></p>
+    <h1>How the crowd game works</h1>
+    <p class="lede">Here we'll go through the second sheet in a bit more detail: what a mean field game is, which part
+      of the game each slider changes, and how the page solves it (all in your browser).</p>
+  </header>
+
+  <main class="doc-body">
+    <section aria-labelledby="what">
+      <h2 id="what">What a mean field game is</h2>
+      <p>Imagine a crowd of people trying to leave a room. Each person wants to reach the exit without walking too fast
+        and without getting stuck in a crush near the door. The best route for any one person depends on where everyone
+        else goes, and everyone else is making the same calculation. A <em>mean field game</em> describes the outcome
+        when the crowd is large enough that no single person changes the picture very much. In that case each agent only
+        needs to react to the crowd's density \(m(t, x)\) (roughly, how many people are near \(x\) at time \(t\)),
+        rather than to each of its individual neighbours.</p>
+      <p>An "equilibrium" is a density and a plan that are consistent with each other: when everybody follows the plan,
+        the crowd moves exactly the way \(m\) says it will, and given \(m\), nobody can lower their own cost by
+        switching
+        to a different plan. This consistency is what makes these agents look ahead. For example, if the near door is
+        going to be jammed in half a second, some of the agents will already be heading for the far one.</p>
+    </section>
+
+    <section aria-labelledby="game">
+      <h2 id="game">The game on this page</h2>
+      <p>Here the agents live in a domain \(\Omega\) (the room, including its walls). An agent at position \(x \in
+        \Omega\) picks a velocity \(\alpha\) and moves with a little bit of randomness:</p>
+      $$\mathrm{d}X_t = \alpha_t\,\mathrm{d}t + \sqrt{2\nu}\,\mathrm{d}W_t.$$
+      <p>Each agent pays for effort, for crowding, and for whatever distance is left to go when time runs out:</p>
+      $$J(\alpha) = \mathbb{E}\left[\int_0^T \Big(\tfrac12|\alpha_t|^2 + \kappa\, m(t, X_t)\Big)\,\mathrm{d}t \;+\;
+      \gamma\, D(X_T)\right],$$
+      <p>where \(\gamma\) is the urgency and \(D\) is the walking distance (around the walls) to the green target zone,
+        so \(D = 0\) inside the zone. If we write \(u(t, x)\) for the best possible cost still to pay starting from
+        \((t, x)\), then the equilibrium is described by the pair of equations</p>
+      $$\begin{aligned}
+      -\partial_t u - \nu\,\Delta u + \tfrac12 |\nabla u|^2 &= \kappa\, m, & u(T, \cdot) &= \gamma\, D,\\
+      \partial_t m - \nu\,\Delta m - \nabla\!\cdot\!\big(m\, \nabla u\big) &= 0, & m(0, \cdot) &= m_0.
+      \end{aligned}$$
+      <p>The first equation (the Hamilton–Jacobi–Bellman equation) runs backward in time from the deadline and gives
+        everyone's best plan, which is to move with velocity \(\alpha^\ast = -\nabla u\). The second equation (the
+        Fokker–Planck equation) runs forward in time from the starting crowd and moves the density along that plan. Each
+        equation needs the other one's answer, and that coupling is what makes this a game rather than two separate
+        problems. Since the crowding cost \(\kappa m\) increases with \(m\), the game has exactly one equilibrium.</p>
+      <p>The "crowd-blind" plan is the same game with \(\kappa = 0\). These agents plan as if the room were empty, but
+        the results table still bills them for the crowding they actually cause.</p>
+    </section>
+
+    <section aria-labelledby="sliders">
+      <h2 id="sliders">What each parameter changes</h2>
+      <p>Here's what each control on the second sheet does to the game (or, in a few cases, only to how the game is
+        solved).</p>
+      <div class="table-scroll">
+        <table class="compare doc-table">
+          <thead>
+            <tr>
+              <th scope="col">Parameter</th>
+              <th scope="col">Symbol</th>
+              <th scope="col">What it changes</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">Domain</th>
+              <td>\(\Omega\)</td>
+              <td>Where agents are allowed to be, which is the room shape picked with the "Room" buttons. Walls are
+                removed from the mesh so nobody can cross them, and the distance \(D\) is measured around them.</td>
+            </tr>
+            <tr>
+              <th scope="row">Dashed circle</th>
+              <td>\(m_0\)</td>
+              <td>The starting crowd, a smooth bump filling the circle with total mass 1. You can drag it to move it,
+                and use the square on its rim to resize it.</td>
+            </tr>
+            <tr>
+              <th scope="row">Green circle</th>
+              <td>\(D\)</td>
+              <td>The target zone. The terminal cost is zero inside it and grows with walking distance outside of it.
+              </td>
+            </tr>
+            <tr>
+              <th scope="row">Dislike of crowds</th>
+              <td>\(\kappa\)</td>
+              <td>The price per unit of density, per unit of time. Higher values make the equilibrium spread out, split
+                between doors, and stagger when agents leave.</td>
+            </tr>
+            <tr>
+              <th scope="row">Urgency</th>
+              <td>\(\gamma\)</td>
+              <td>The price per unit of distance still to go at the deadline. This also sets the top walking speed,
+                since a planner far from the target moves at a speed close to \(\gamma\).</td>
+            </tr>
+            <tr>
+              <th scope="row">Randomness</th>
+              <td>\(\nu\)</td>
+              <td>The strength of the random jostling in each agent's motion. In the equations this is the diffusion
+                term \(\nu\Delta\).</td>
+            </tr>
+            <tr>
+              <th scope="row">Time allowed</th>
+              <td>\(T\)</td>
+              <td>The deadline. With more time, agents can afford to wait for a jam to clear.</td>
+            </tr>
+            <tr>
+              <th scope="row">Mesh, Cells</th>
+              <td></td>
+              <td>How space is cut into cells (relaxed with Lloyd's algorithm, Poisson disk, or uniform random seeds)
+                and how many cells there are. This changes the numerical solution but not the game itself. Rougher
+                meshes and fewer cells give more numerical smearing.</td>
+            </tr>
+            <tr>
+              <th scope="row">Rounds of play</th>
+              <td>\(K\)</td>
+              <td>How many rounds of fictitious play are used to find the equilibrium (see below). More rounds shrink
+                the gap shown in the step 1 chart.</td>
+            </tr>
+            <tr>
+              <th scope="row">Agents</th>
+              <td>\(N\)</td>
+              <td>How many agents are drawn from \(m_0\) in step 2. This doesn't change the game, only how well \(N\)
+                agents reproduce it.</td>
+            </tr>
+            <tr>
+              <th scope="row">Voronoi pressure</th>
+              <td></td>
+              <td>Turns on the force from the first sheet, for the reacting crowd only. Without it, reacting agents
+                ignore each other entirely.</td>
+            </tr>
+            <tr>
+              <th scope="row">Contact repulsion</th>
+              <td></td>
+              <td>A short-range push between any two agents, applied to every crowd. Planning agents aren't expecting
+                it, so it pulls them off of their plan.</td>
+            </tr>
+            <tr>
+              <th scope="row">Planners copy the scheme’s spread</th>
+              <td></td>
+              <td>Whether planning agents add the random spread of the numerical solution (explained below), or just the
+                \(\nu\) randomness.</td>
+            </tr>
+            <tr>
+              <th scope="row">Crowd-aware / crowd-blind plan</th>
+              <td>\(\kappa\) or \(0\)</td>
+              <td>Which equilibrium the left-hand panel and its agents show.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section aria-labelledby="solve">
+      <h2 id="solve">How it's solved</h2>
+      <h3>Space and time</h3>
+      <p>We cut the domain into Voronoi cells \(V_i\) (see the "What's a Voronoi cell?" box on the main page). Two
+        neighbouring cells \(i\) and \(j\) share an edge of length \(S_{ij}\), and their seeds are a distance
+        \(d_{ij}\) apart. Time is split into 64 equal steps from \(0\) to \(T\). The distance \(D\) is computed on the
+        graph of cells using Dijkstra's algorithm, starting from the cells inside the target zone.</p>
+      <h3>The backward equation</h3>
+      <p>On the mesh, an agent in cell \(i\) chooses how quickly to leave for each of its neighbours. Optimizing over
+        that choice gives the discrete version of \(\tfrac12|\nabla u|^2\):</p>
+      $$H_i(u) = \frac{1}{2|V_i|}\sum_j \frac{S_{ij}}{d_{ij}}\,\big((u_i - u_j)^+\big)^2.$$
+      <p>This means an agent only ever moves toward neighbours where the cost to go is lower, and it does so at speed
+        \((u_i - u_j)^+/d_{ij}\). Each backward time step is implicit, meaning it solves the full nonlinear equation for
+        \(u\) at that step. We do this cell by cell, with a few Newton iterations per cell, and repeat the sweeps until
+        nothing changes. Because the step is implicit, it stays stable for any step size.</p>
+      <h3>The forward equation</h3>
+      <p>Each backward step amounts to one matrix \(A^n\) acting on the values in every cell (so \(A^n u^n\) equals
+        some known terms). The forward step for the density then uses exactly the transpose of that matrix:</p>
+      $$(A^n)^{\mathsf T}\, m^{n+1} = \frac{|V|\, m^n}{\Delta t}.$$
+      <p>This choice has three nice consequences. First, the total mass of the crowd never changes. Second, the density
+        never goes negative. Third, the cost to go at the start, averaged over the starting crowd, equals the total cost
+        the crowd actually pays along the way (the page checks this to about nine digits). This is the same transpose
+        trick that's behind adjoint methods and backpropagation.</p>
+      <h3>Finding the equilibrium: fictitious play</h3>
+      <p>We start with a guess \(\bar m^{(0)}\) for the crowd (everyone standing still), and then repeat the following
+        round \(K\) times. First, we solve the backward equation against the current guess, which gives everyone's best
+        plan. Then we push \(m_0\) forward along that plan, which gives the crowd \(\hat m^{(k)}\) that would actually
+        result. Finally, we fold this into the guess as a running average:</p>
+      $$\bar m^{(k+1)} = \bar m^{(k)} + \frac{1}{k+1}\big(\hat m^{(k)} - \bar m^{(k)}\big).$$
+      <p>At an equilibrium the guess and the resulting crowd agree, and the chart under step 1 plots how far apart they
+        still are. The crowd-blind game only needs one round, since its plan doesn't depend on the crowd at all.</p>
+      <h3>From the density back to agents</h3>
+      <p>In step 2 we draw \(N\) starting spots in proportion to \(m_0\), and all three crowds start from these same
+        spots. A planning agent reads its velocity off of the solution in its current cell, blended smoothly with the
+        neighbouring cells. The numerical scheme also spreads the crowd out a little more than \(\nu\) alone would
+        (because of the way it moves density between cells), so planners copy that extra spread too. That way, \(N\)
+        planning agents reproduce the equilibrium we actually computed, rather than a sharper version of it.</p>
+      <p>Reacting agents use the same velocity rule, but with the cost to go replaced by the end-of-game cost
+        \(\gamma D\) alone. You can think of this as a plan with zero foresight, with Voronoi pressure added on top if
+        it's switched on. Every agent is billed with the game's cost \(J\), using the crowd's own density on the mesh,
+        and those bills are what fill in the results table.</p>
+    </section>
+
+    <section aria-labelledby="limits">
+      <h2 id="limits">Things to keep in mind</h2>
+      <p>This is a small model, chosen so that it runs in a browser in a few seconds. The mesh is coarse (a few hundred
+        to about 1,600 cells), and the equilibrium is only as sharp as the mesh allows. Fictitious play also converges
+        slowly, so 30 rounds gets close but not all the way there. The crowding cost only depends on the density right
+        where an agent is standing, whereas real people also react to what they see ahead of them. Finally, on random
+        meshes the discrete game can behave slightly differently in different directions, which is one reason the
+        relaxed mesh is the default.</p>
+    </section>
+  </main>
+
+  <footer class="colophon">
+    <p><a href="index.html#plan">Back to the crowds</a>. By David Cavender. <a
+        href="https://github.com/dbcav/voronoi_crowds">Source on GitHub</a>.</p>
+  </footer>
+  <script src="vendor/katex/katex.min.js"></script>
+  <script src="vendor/katex/auto-render.min.js"></script>
+  <script src="js/math.js"></script>
+</body>
+
+</html>
